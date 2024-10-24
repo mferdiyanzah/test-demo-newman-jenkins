@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     tools {
-        nodejs 'nodejs'
+        nodejs 'nodejs' 
     }
     
     environment {
@@ -26,16 +26,11 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                // Cache npm packages
-                cache(maxCacheSize: 500, path: '~/.npm', key: 'npm-cache') {
-                    sh 'npm install -g newman || true'
-                }
-                // Cache global npm modules
-                cache(maxCacheSize: 500, path: '/usr/local/lib/node_modules', key: 'npm-global') {
-                    sh 'npm install -g newman-reporter-htmlextra || true'
-                }
-                // Verify installation
-                sh 'newman --version'
+                sh '''
+                    npm install -g newman
+                    npm install -g newman-reporter-htmlextra
+                    newman --version
+                '''
             }
         }
         
