@@ -4,13 +4,11 @@ pipeline {
     environment {
         NEWMAN_COLLECTION = '/postman/collection.json'
         NEWMAN_ENVIRONMENT = '/postman/env.json'
-        REPORT_DIRECTORY = 'newman-reports'
     }
     
     stages {
         stage('Install Dependencies') {
             steps {
-                // Install Newman (Postman CLI) if not already installed
                 sh '''
                     npm install -g newman
                     npm install -g newman-reporter-htmlextra
@@ -26,7 +24,7 @@ pipeline {
                     newman run ${NEWMAN_COLLECTION} \
                     --environment ${NEWMAN_ENVIRONMENT} \
                     --reporters cli,htmlextra \
-                    --reporter-htmlextra-export ${REPORT_DIRECTORY}/report.html \
+                    --reporter-htmlextra-export report.html \
                     --reporter-htmlextra-darkTheme \
                     --suppress-exit-code
                 '''
@@ -41,7 +39,7 @@ pipeline {
                 allowMissing: false,
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
-                reportDir: "${REPORT_DIRECTORY}",
+                reportDir: "/",
                 reportFiles: 'report.html',
                 reportName: 'Postman Test Report'
             ])
