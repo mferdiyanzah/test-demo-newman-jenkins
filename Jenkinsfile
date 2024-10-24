@@ -26,7 +26,10 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                cache(maxCacheSize: 500, caches: [cache(path: '~/.npm', key: 'npm-cache'), cache(path: '/usr/local/lib/node_modules', key: 'npm-global')]) {
+                cache(maxCacheSize: 500, caches: [
+                    cache(path: '~/.npm', key: 'npm-cache'),
+                    cache(path: '/usr/local/lib/node_modules', key: 'npm-global')
+                ]) {
                     sh '''
                         npm install -g newman || true
                         npm install -g newman-reporter-htmlextra || true
