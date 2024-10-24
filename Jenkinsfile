@@ -6,8 +6,8 @@ pipeline {
     }
     
     environment {
-        NEWMAN_COLLECTION = '/postman/collection.json'
-        NEWMAN_ENVIRONMENT = '/postman/env.json'
+        NEWMAN_COLLECTION = 'postman/collection.json'
+        NEWMAN_ENVIRONMENT = 'postman/env.json'
     }
     
     stages {
