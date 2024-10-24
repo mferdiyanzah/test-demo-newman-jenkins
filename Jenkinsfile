@@ -1,5 +1,9 @@
 pipeline {
     agent any
+
+    tools {
+        nodejs 'nodejs' 
+    }
     
     environment {
         NEWMAN_COLLECTION = '/postman/collection.json'
@@ -7,19 +11,25 @@ pipeline {
     }
     
     stages {
+        stage('Setup Node') {
+            steps {
+                sh 'node --version'
+                sh 'npm --version'
+            }
+        }
+
         stage('Install Dependencies') {
             steps {
                 sh '''
                     npm install -g newman
                     npm install -g newman-reporter-htmlextra
+                    newman --version
                 '''
             }
         }
         
         stage('Run Postman Collection') {
             steps {
-                sh 'mkdir -p ${REPORT_DIRECTORY}'
-                
                 sh '''
                     newman run ${NEWMAN_COLLECTION} \
                     --environment ${NEWMAN_ENVIRONMENT} \
