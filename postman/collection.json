@@ -1,0 +1,241 @@
+{
+  "info": {
+    "_postman_id": "e510bd9e-3e9c-4572-8e94-83e927817f73",
+    "name": "Test Demo",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "32702405"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Log In User",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {}
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\r",
+                  "    pm.response.to.have.status(200);\r",
+                  "});\r",
+                  "\r",
+                  "// Parse the response to extract token\r",
+                  "let jsonData = pm.response.json();\r",
+                  "pm.environment.set(\"token\", jsonData.token);\r",
+                  "\r",
+                  "// Ensure token exists\r",
+                  "pm.test(\"Token is present\", function () {\r",
+                  "    pm.expect(jsonData).to.have.property('token');\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"email\": \"testemailalwan@mail.com\",\n    \"password\": \"TestApp123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{base_url}}/users/login",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "users",
+                "login"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Log In User",
+              "originalRequest": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"email\": \"test2@fake.com\",\n    \"password\": \"myNewPassword\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "https://thinking-tester-contact-list.herokuapp.com/users/login",
+                  "protocol": "https",
+                  "host": [
+                    "thinking-tester-contact-list",
+                    "herokuapp",
+                    "com"
+                  ],
+                  "path": [
+                    "users",
+                    "login"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": null,
+              "cookie": [],
+              "body": "{\n    \"user\": {\n        \"_id\": \"608b2db1add2691791c04c89\",\n        \"firstName\": \"Updated\",\n        \"lastName\": \"Username\",\n        \"email\": \"test2@fake.com\",\n        \"__v\": 212\n    },\n    \"token\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2MDgyMWYzMDYyZmJiMjEzZTJhZDlhMjAiLCJpYXQiOjE2MTk3MzQ0NDB9.4CftGzYRmK04PJv6xKqmWWo9iOH2wlizEU8vk-L48LI\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Contact",
+      "item": [
+        {
+          "name": "Get Contact List",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test(\"Status code is 200\", function () {\r",
+                  "    pm.response.to.have.status(200);\r",
+                  "});\r",
+                  "\r",
+                  "// Check if response is an array\r",
+                  "pm.test(\"Response is an array\", function () {\r",
+                  "    let jsonData = pm.response.json();\r",
+                  "    pm.expect(jsonData).to.be.an('array');\r",
+                  "});\r",
+                  "\r",
+                  "// Validate first contact's structure\r",
+                  "pm.test(\"First contact has required fields\", function () {\r",
+                  "    let jsonData = pm.response.json();\r",
+                  "    if (jsonData.length > 0) {\r",
+                  "        let contact = jsonData[0];\r",
+                  "        pm.expect(contact).to.have.property('firstName');\r",
+                  "        pm.expect(contact).to.have.property('lastName');\r",
+                  "        pm.expect(contact).to.have.property('email');\r",
+                  "    }\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {}
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Ensure token is available\r",
+                  "let token = pm.environment.get(\"token\");\r",
+                  "pm.test(\"Token is available\", function () {\r",
+                  "    pm.expect(token).to.not.be.undefined;\r",
+                  "});\r",
+                  ""
+                ],
+                "type": "text/javascript",
+                "packages": {}
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/contacts",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "contacts"
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "Get Contact List",
+              "originalRequest": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer •••••••",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "https://thinking-tester-contact-list.herokuapp.com/contacts",
+                  "protocol": "https",
+                  "host": [
+                    "thinking-tester-contact-list",
+                    "herokuapp",
+                    "com"
+                  ],
+                  "path": [
+                    "contacts"
+                  ]
+                }
+              },
+              "status": "OK",
+              "code": 200,
+              "_postman_previewlanguage": "Text",
+              "header": null,
+              "cookie": [],
+              "body": "[\n    {\n        \"_id\": \"6085a221fcfc72405667c3d4\",\n        \"firstName\": \"John\",\n        \"lastName\": \"Doe\",\n        \"birthdate\": \"1970-01-01\",\n        \"email\": \"jdoe@fake.com\",\n        \"phone\": \"8005555555\",\n        \"street1\": \"1 Main St.\",\n        \"street2\": \"Apartment A\",\n        \"city\": \"Anytown\",\n        \"stateProvince\": \"KS\",\n        \"postalCode\": \"12345\",\n        \"country\": \"USA\",\n        \"owner\": \"6085a21efcfc72405667c3d4\",\n        \"__v\": 0\n    },\n    {\n        \"_id\": \"607b29861ba4d3a0b96733bc\",\n        \"firstName\": \"Jan\",\n        \"lastName\": \"Brady\",\n        \"birthdate\": \"2001-11-11\",\n        \"email\": \"fake2@gmail.com\",\n        \"phone\": \"8008675309\",\n        \"street1\": \"100 Elm St.\",\n        \"city\": \"Springfield\",\n        \"stateProvince\": \"NE\",\n        \"postalCode\": \"23456\",\n        \"country\": \"United States\",\n        \"owner\": \"6085a21efcfc72405667c3d4\",\n        \"__v\": 0\n    }\n]"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ]
+}
