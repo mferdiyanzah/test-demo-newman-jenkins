@@ -39,14 +39,21 @@ pipeline {
         
         stage('Run Postman Collection') {
             steps {
-                sh '''
-                    newman run ${NEWMAN_COLLECTION} \
-                    --environment ${NEWMAN_ENVIRONMENT} \
-                    --reporters cli,htmlextra \
-                    --reporter-htmlextra-export newman/report.html \
-                    --reporter-htmlextra-darkTheme \
-                    --suppress-exit-code
-                '''
+                script {
+                    // Capture the newman output
+                    env.NEWMAN_OUTPUT = sh(
+                        script: '''
+                            newman run ${NEWMAN_COLLECTION} \
+                            --environment ${NEWMAN_ENVIRONMENT} \
+                            --reporters cli,htmlextra \
+                            --reporter-htmlextra-export newman/report.html \
+                            --reporter-htmlextra-darkTheme \
+                            --reporter-cli-no-console \
+                            --suppress-exit-code 2>&1
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                }
             }
         }
     }
@@ -63,11 +70,62 @@ pipeline {
                 reportName: 'Postman Test Report'
             ])
 
-            // Send Discord notification
+            // Send Discord notification with test results
             script {
-                def message = "Build #${currentBuild.number} completed: ${currentBuild.currentResult}. Check the report here: ${env.BUILD_URL}"
+                // Parse newman output for statistics
+                def stats = [
+                    total: (env.NEWMAN_OUTPUT =~ /iterations\s+\[\d+\/(\d+)\]/)[0][1] as Integer,
+                    failed: (env.NEWMAN_OUTPUT =~ /iterations\s+\[(\d+)\/\d+\]/)[0][1] as Integer,
+                    failedTests: (env.NEWMAN_OUTPUT =~ /assertions\s+\[(\d+)\/\d+\]/)[0][1] as Integer,
+                    totalTests: (env.NEWMAN_OUTPUT =~ /assertions\s+\[\d+\/(\d+)\]/)[0][1] as Integer
+                ]
+                
+                // Calculate pass percentage
+                def passPercentage = ((stats.totalTests - stats.failedTests) / stats.totalTests * 100).round(2)
+                
+                // Determine color based on results (green: all passed, yellow: some failed, red: all failed)
+                def color
+                if (stats.failedTests == 0) {
+                    color = 65280  // Green
+                } else if (stats.failedTests == stats.totalTests) {
+                    color = 16711680  // Red
+                } else {
+                    color = 16776960  // Yellow
+                }
+
+                // Create Discord message embed
+                def payload = """
+                {
+                    "embeds": [{
+                        "title": "Postman Test Results - Build #${currentBuild.number}",
+                        "color": ${color},
+                        "fields": [
+                            {
+                                "name": "Status",
+                                "value": "${currentBuild.currentResult}",
+                                "inline": true
+                            },
+                            {
+                                "name": "Pass Rate",
+                                "value": "${passPercentage}%",
+                                "inline": true
+                            },
+                            {
+                                "name": "Test Results",
+                                "value": "✅ Passed: ${stats.totalTests - stats.failedTests}\\n❌ Failed: ${stats.failedTests}\\n📊 Total: ${stats.totalTests}",
+                                "inline": false
+                            }
+                        ],
+                        "footer": {
+                            "text": "View detailed report: ${env.BUILD_URL}"
+                        },
+                        "timestamp": "${new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", TimeZone.getTimeZone('UTC'))}"
+                    }]
+                }
+                """
+
                 sh """
-                    curl -H "Content-Type: application/json" -d '{"content": "${message}"}' ${DISCORD_WEBHOOK_URL}
+                    curl -H "Content-Type: application/json" -d '${payload}' ${DISCORD_WEBHOOK_URL}
                 """
             }
         }
