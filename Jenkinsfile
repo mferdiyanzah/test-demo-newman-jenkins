@@ -11,6 +11,12 @@ pipeline {
     }
     
     stages {
+        stage('Create Report Directory') {
+            steps {
+                sh 'mkdir -p newman'
+            }
+        }
+
         stage('Setup Node') {
             steps {
                 sh 'node --version'
@@ -20,11 +26,13 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '''
-                    npm install -g newman
-                    npm install -g newman-reporter-htmlextra
-                    newman --version
-                '''
+                cache(maxCacheSize: 500, caches: [cache(path: '~/.npm', key: 'npm-cache'), cache(path: '/usr/local/lib/node_modules', key: 'npm-global')]) {
+                    sh '''
+                        npm install -g newman || true
+                        npm install -g newman-reporter-htmlextra || true
+                        newman --version
+                    '''
+                }
             }
         }
         
@@ -34,7 +42,7 @@ pipeline {
                     newman run ${NEWMAN_COLLECTION} \
                     --environment ${NEWMAN_ENVIRONMENT} \
                     --reporters cli,htmlextra \
-                    --reporter-htmlextra-export report.html \
+                    --reporter-htmlextra-export newman/report.html \
                     --reporter-htmlextra-darkTheme \
                     --suppress-exit-code
                 '''
@@ -49,7 +57,7 @@ pipeline {
                 allowMissing: false,
                 alwaysLinkToLastBuild: true,
                 keepAll: true,
-                reportDir: "/",
+                reportDir: "newman",
                 reportFiles: 'report.html',
                 reportName: 'Postman Test Report'
             ])
