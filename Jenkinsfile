@@ -28,19 +28,37 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                sh '''
-                    npm config set cache $NPM_CACHE --global
-                    npm install -g newman
-                    npm install -g newman-reporter-htmlextra
-                    newman --version
-                '''
+                script {
+                    // Check if newman is installed
+                    def newmanInstalled = sh(
+                        script: 'newman --version >/dev/null 2>&1',
+                        returnStatus: true
+                    ) == 0
+                    
+                    // Check if newman-reporter-htmlextra is installed
+                    def htmlextraInstalled = sh(
+                        script: 'npm list -g newman-reporter-htmlextra >/dev/null 2>&1',
+                        returnStatus: true
+                    ) == 0
+                    
+                    sh 'npm config set cache $NPM_CACHE --global'
+                    
+                    if (!newmanInstalled) {
+                        sh 'npm install -g newman'
+                    }
+                    
+                    if (!htmlextraInstalled) {
+                        sh 'npm install -g newman-reporter-htmlextra'
+                    }
+                    
+                    sh 'newman --version'
+                }
             }
         }
         
         stage('Run Postman Collection') {
             steps {
                 script {
-                    // Capture the newman output
                     env.NEWMAN_OUTPUT = sh(
                         script: '''
                             newman run ${NEWMAN_COLLECTION} \
@@ -60,7 +78,6 @@ pipeline {
     
     post {
         always {
-            // Archive the test results
             publishHTML(target: [
                 allowMissing: false,
                 alwaysLinkToLastBuild: true,
@@ -70,63 +87,107 @@ pipeline {
                 reportName: 'Postman Test Report'
             ])
 
-            // Send Discord notification with test results
             script {
-                // Parse newman output for statistics
-                def stats = [
-                    total: (env.NEWMAN_OUTPUT =~ /iterations\s+\[\d+\/(\d+)\]/)[0][1] as Integer,
-                    failed: (env.NEWMAN_OUTPUT =~ /iterations\s+\[(\d+)\/\d+\]/)[0][1] as Integer,
-                    failedTests: (env.NEWMAN_OUTPUT =~ /assertions\s+\[(\d+)\/\d+\]/)[0][1] as Integer,
-                    totalTests: (env.NEWMAN_OUTPUT =~ /assertions\s+\[\d+\/(\d+)\]/)[0][1] as Integer
-                ]
-                
-                // Calculate pass percentage
-                def passPercentage = ((stats.totalTests - stats.failedTests) / stats.totalTests * 100).round(2)
-                
-                // Determine color based on results (green: all passed, yellow: some failed, red: all failed)
-                def color
-                if (stats.failedTests == 0) {
-                    color = 65280  // Green
-                } else if (stats.failedTests == stats.totalTests) {
-                    color = 16711680  // Red
-                } else {
-                    color = 16776960  // Yellow
-                }
+                try {
+                    def stats = [
+                        total: 0,
+                        failed: 0,
+                        failedTests: 0,
+                        totalTests: 0
+                    ]
+                    
+                    // Safely extract statistics with null checks
+                    def newmanOutput = env.NEWMAN_OUTPUT ?: ''
+                    
+                    // More robust regex patterns with defensive programming
+                    def iterationMatch = newmanOutput =~ /iterations\s+\[(\d+)\/(\d+)\]/
+                    def assertionMatch = newmanOutput =~ /assertions\s+\[(\d+)\/(\d+)\]/
+                    
+                    if (iterationMatch.find()) {
+                        stats.failed = iterationMatch.group(1) as Integer
+                        stats.total = iterationMatch.group(2) as Integer
+                    }
+                    
+                    if (assertionMatch.find()) {
+                        stats.failedTests = assertionMatch.group(1) as Integer
+                        stats.totalTests = assertionMatch.group(2) as Integer
+                    }
+                    
+                    // Safe calculation of pass percentage
+                    def passPercentage = stats.totalTests > 0 ? 
+                        ((stats.totalTests - stats.failedTests) / stats.totalTests * 100).round(2) : 
+                        0
+                    
+                    // Determine color based on results
+                    def color = 16776960 // Default to Yellow
+                    if (stats.totalTests > 0) {
+                        if (stats.failedTests == 0) {
+                            color = 65280  // Green
+                        } else if (stats.failedTests == stats.totalTests) {
+                            color = 16711680  // Red
+                        }
+                    }
 
-                // Create Discord message embed
-                def payload = """
-                {
-                    "embeds": [{
-                        "title": "Postman Test Results - Build #${currentBuild.number}",
-                        "color": ${color},
-                        "fields": [
-                            {
-                                "name": "Status",
-                                "value": "${currentBuild.currentResult}",
-                                "inline": true
+                    def payload = """
+                    {
+                        "embeds": [{
+                            "title": "Postman Test Results - Build #${currentBuild.number}",
+                            "color": ${color},
+                            "fields": [
+                                {
+                                    "name": "Status",
+                                    "value": "${currentBuild.currentResult}",
+                                    "inline": true
+                                },
+                                {
+                                    "name": "Pass Rate",
+                                    "value": "${passPercentage}%",
+                                    "inline": true
+                                },
+                                {
+                                    "name": "Test Results",
+                                    "value": "✅ Passed: ${stats.totalTests - stats.failedTests}\\n❌ Failed: ${stats.failedTests}\\n📊 Total: ${stats.totalTests}",
+                                    "inline": false
+                                }
+                            ],
+                            "footer": {
+                                "text": "View detailed report: ${env.BUILD_URL}"
                             },
-                            {
-                                "name": "Pass Rate",
-                                "value": "${passPercentage}%",
-                                "inline": true
-                            },
-                            {
-                                "name": "Test Results",
-                                "value": "✅ Passed: ${stats.totalTests - stats.failedTests}\\n❌ Failed: ${stats.failedTests}\\n📊 Total: ${stats.totalTests}",
-                                "inline": false
+                            "timestamp": "${new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", TimeZone.getTimeZone('UTC'))}"
+                        }]
+                    }
+                    """
+
+                    sh """
+                        curl -H "Content-Type: application/json" -d '${payload}' ${DISCORD_WEBHOOK_URL}
+                    """
+                } catch (Exception e) {
+                    echo "Error processing newman results: ${e.getMessage()}"
+                    // Send a simplified Discord notification in case of error
+                    def errorPayload = """
+                    {
+                        "embeds": [{
+                            "title": "Postman Test Results - Build #${currentBuild.number}",
+                            "color": 16711680,
+                            "description": "Error occurred while processing test results",
+                            "fields": [
+                                {
+                                    "name": "Status",
+                                    "value": "${currentBuild.currentResult}",
+                                    "inline": true
+                                }
+                            ],
+                            "footer": {
+                                "text": "View detailed report: ${env.BUILD_URL}"
                             }
-                        ],
-                        "footer": {
-                            "text": "View detailed report: ${env.BUILD_URL}"
-                        },
-                        "timestamp": "${new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", TimeZone.getTimeZone('UTC'))}"
-                    }]
+                        }]
+                    }
+                    """
+                    
+                    sh """
+                        curl -H "Content-Type: application/json" -d '${errorPayload}' ${DISCORD_WEBHOOK_URL}
+                    """
                 }
-                """
-
-                sh """
-                    curl -H "Content-Type: application/json" -d '${payload}' ${DISCORD_WEBHOOK_URL}
-                """
             }
         }
     }
