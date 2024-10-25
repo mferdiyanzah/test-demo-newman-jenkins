@@ -139,7 +139,7 @@ pipeline {
                                 }
                             ],
                             "footer": {
-                                "text": "View detailed report: ${env.BUILD_URL}"
+                                "text": "View detailed report: [Jenkins](${env.BUILD_URL})"
                             },
                             "timestamp": "${new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", TimeZone.getTimeZone('UTC'))}"
                         }]
