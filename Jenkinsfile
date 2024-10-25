@@ -104,7 +104,11 @@ pipeline {
                     }
                     
                     def totalTests = totalPassed + totalFailed + totalSkipped
-                    def passPercentage = totalTests > 0 ? ((totalPassed / totalTests) * 100).round(2) : 0
+                    
+                    // Fixed calculation for pass percentage using setScale instead of round
+                    def passPercentage = totalTests > 0 ? 
+                        (totalPassed * 100.0 / totalTests).setScale(2, java.math.RoundingMode.HALF_UP) : 
+                        0
                     
                     // Determine color based on results
                     def color
