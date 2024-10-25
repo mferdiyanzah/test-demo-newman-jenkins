@@ -59,11 +59,13 @@ pipeline {
         stage('Run Postman Collection') {
             steps {
                 script {
+                    // Run Newman with both HTML and JSON reporters
                     sh '''
                         newman run ${NEWMAN_COLLECTION} \
                         --environment ${NEWMAN_ENVIRONMENT} \
-                        --reporters cli,htmlextra \
+                        --reporters cli,htmlextra,json \
                         --reporter-htmlextra-export newman/report.html \
+                        --reporter-json-export newman/report.json \
                         --reporter-htmlextra-darkTheme \
                         --reporter-cli-no-console \
                         --suppress-exit-code || true
@@ -86,35 +88,29 @@ pipeline {
 
             script {
                 try {
-                    // Read the HTML report file
-                    def htmlContent = readFile('newman/report.html')
+                    // Read and parse the JSON report
+                    def reportJson = readJSON file: 'newman/report.json'
                     
-                    // Parse total passed and failed tests from the footer
-                    def totalPassed = 0
-                    def totalFailed = 0
-                    def totalSkipped = 0
+                    // Extract test results from JSON
+                    def run = reportJson.run
+                    def stats = run.stats
+                    def assertions = stats.assertions
                     
-                    // Look for the footer row with totals
-                    def footerMatch = htmlContent =~ /<tr class="bg-light">[^<]*<td><strong>Total<\/strong><\/td>[^<]*<td class="text-center">(\d+)<\/td>[^<]*<td class="text-center">(\d+)<\/td>[^<]*<td class="text-center">(\d+)<\/td>/
+                    def totalTests = assertions.total
+                    def failedTests = assertions.failed
+                    def passedTests = assertions.total - assertions.failed
+                    def skippedTests = assertions.skipped ?: 0
                     
-                    if (footerMatch.find()) {
-                        totalPassed = footerMatch[0][1] as Integer
-                        totalFailed = footerMatch[0][2] as Integer
-                        totalSkipped = footerMatch[0][3] as Integer
-                    }
-                    
-                    def totalTests = totalPassed + totalFailed + totalSkipped
-                    
-                    // Fixed calculation for pass percentage using setScale instead of round
+                    // Calculate pass percentage
                     def passPercentage = totalTests > 0 ? 
-                        (totalPassed * 100.0 / totalTests).setScale(2, java.math.RoundingMode.HALF_UP) : 
+                        (passedTests * 100.0 / totalTests).setScale(2, java.math.RoundingMode.HALF_UP) : 
                         0
                     
                     // Determine color based on results
                     def color
-                    if (totalFailed == 0) {
+                    if (failedTests == 0) {
                         color = 65280  // Green
-                    } else if (totalPassed == 0) {
+                    } else if (passedTests == 0) {
                         color = 16711680  // Red
                     } else {
                         color = 16776960  // Yellow
@@ -138,7 +134,7 @@ pipeline {
                                 },
                                 {
                                     "name": "Test Results",
-                                    "value": "✅ Passed: ${totalPassed}\\n❌ Failed: ${totalFailed}\\n⏩ Skipped: ${totalSkipped}\\n📊 Total: ${totalTests}",
+                                    "value": "✅ Passed: ${passedTests}\\n❌ Failed: ${failedTests}\\n⏩ Skipped: ${skippedTests}\\n📊 Total: ${totalTests}",
                                     "inline": false
                                 }
                             ],
