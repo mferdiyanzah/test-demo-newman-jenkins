@@ -59,18 +59,15 @@ pipeline {
         stage('Run Postman Collection') {
             steps {
                 script {
-                    env.NEWMAN_OUTPUT = sh(
-                        script: '''
-                            newman run ${NEWMAN_COLLECTION} \
-                            --environment ${NEWMAN_ENVIRONMENT} \
-                            --reporters cli,htmlextra \
-                            --reporter-htmlextra-export newman/report.html \
-                            --reporter-htmlextra-darkTheme \
-                            --reporter-cli-no-console \
-                            --suppress-exit-code 2>&1
-                        ''',
-                        returnStdout: true
-                    ).trim()
+                    sh '''
+                        newman run ${NEWMAN_COLLECTION} \
+                        --environment ${NEWMAN_ENVIRONMENT} \
+                        --reporters cli,htmlextra \
+                        --reporter-htmlextra-export newman/report.html \
+                        --reporter-htmlextra-darkTheme \
+                        --reporter-cli-no-console \
+                        --suppress-exit-code || true
+                    '''
                 }
             }
         }
@@ -89,43 +86,34 @@ pipeline {
 
             script {
                 try {
-                    def stats = [
-                        total: 0,
-                        failed: 0,
-                        failedTests: 0,
-                        totalTests: 0
-                    ]
+                    // Read the HTML report file
+                    def htmlContent = readFile('newman/report.html')
                     
-                    // Safely extract statistics with null checks
-                    def newmanOutput = env.NEWMAN_OUTPUT ?: ''
+                    // Parse total passed and failed tests from the footer
+                    def totalPassed = 0
+                    def totalFailed = 0
+                    def totalSkipped = 0
                     
-                    // More robust regex patterns with defensive programming
-                    def iterationMatch = newmanOutput =~ /iterations\s+\[(\d+)\/(\d+)\]/
-                    def assertionMatch = newmanOutput =~ /assertions\s+\[(\d+)\/(\d+)\]/
+                    // Look for the footer row with totals
+                    def footerMatch = htmlContent =~ /<tr class="bg-light">[^<]*<td><strong>Total<\/strong><\/td>[^<]*<td class="text-center">(\d+)<\/td>[^<]*<td class="text-center">(\d+)<\/td>[^<]*<td class="text-center">(\d+)<\/td>/
                     
-                    if (iterationMatch.find()) {
-                        stats.failed = iterationMatch.group(1) as Integer
-                        stats.total = iterationMatch.group(2) as Integer
+                    if (footerMatch.find()) {
+                        totalPassed = footerMatch[0][1] as Integer
+                        totalFailed = footerMatch[0][2] as Integer
+                        totalSkipped = footerMatch[0][3] as Integer
                     }
                     
-                    if (assertionMatch.find()) {
-                        stats.failedTests = assertionMatch.group(1) as Integer
-                        stats.totalTests = assertionMatch.group(2) as Integer
-                    }
-                    
-                    // Safe calculation of pass percentage
-                    def passPercentage = stats.totalTests > 0 ? 
-                        ((stats.totalTests - stats.failedTests) / stats.totalTests * 100).round(2) : 
-                        0
+                    def totalTests = totalPassed + totalFailed + totalSkipped
+                    def passPercentage = totalTests > 0 ? ((totalPassed / totalTests) * 100).round(2) : 0
                     
                     // Determine color based on results
-                    def color = 16776960 // Default to Yellow
-                    if (stats.totalTests > 0) {
-                        if (stats.failedTests == 0) {
-                            color = 65280  // Green
-                        } else if (stats.failedTests == stats.totalTests) {
-                            color = 16711680  // Red
-                        }
+                    def color
+                    if (totalFailed == 0) {
+                        color = 65280  // Green
+                    } else if (totalPassed == 0) {
+                        color = 16711680  // Red
+                    } else {
+                        color = 16776960  // Yellow
                     }
 
                     def payload = """
@@ -146,7 +134,7 @@ pipeline {
                                 },
                                 {
                                     "name": "Test Results",
-                                    "value": "✅ Passed: ${stats.totalTests - stats.failedTests}\\n❌ Failed: ${stats.failedTests}\\n📊 Total: ${stats.totalTests}",
+                                    "value": "✅ Passed: ${totalPassed}\\n❌ Failed: ${totalFailed}\\n⏩ Skipped: ${totalSkipped}\\n📊 Total: ${totalTests}",
                                     "inline": false
                                 }
                             ],
@@ -163,13 +151,13 @@ pipeline {
                     """
                 } catch (Exception e) {
                     echo "Error processing newman results: ${e.getMessage()}"
-                    // Send a simplified Discord notification in case of error
+                    
                     def errorPayload = """
                     {
                         "embeds": [{
                             "title": "Postman Test Results - Build #${currentBuild.number}",
                             "color": 16711680,
-                            "description": "Error occurred while processing test results",
+                            "description": "Error occurred while processing test results: ${e.getMessage()}",
                             "fields": [
                                 {
                                     "name": "Status",
